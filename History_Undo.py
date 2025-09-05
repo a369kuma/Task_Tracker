@@ -96,108 +96,70 @@ class TaskManager:
             if task.title == title:
                 task.mark_incomplete()
 
-
-
-
-                
-
-class TaskManagerWithPersistence(TaskManager):
+class TaskManagerWithHistory(TaskManager):
     """
-    Extends TaskManager to add functionality for saving/loading tasks, version control, and backup/restore.
+    Extends TaskManager to include undo and redo functionality.
     """
-    def __init__(self, data_file="tasks.json", backup_dir="backups"):
+    def __init__(self):
         """
-        Initializes a new TaskManagerWithPersistence instance.
-        Args:
-            data_file (str): The file where tasks will be saved and loaded from.
-            backup_dir (str): The directory where backups will be stored.
+        Initializes a new TaskManagerWithHistory instance with undo and redo stacks.
         """
         super().__init__()
-        self.data_file = data_file
-        self.backup_dir = backup_dir
-        self.version_history = []  # A list to store versions of the task list
-        self.load_tasks()
+        self.history = []  # Stack to store previous states for undo
+        self.redo_stack = []  # Stack to store states for redo
 
-    # Save and Load Tasks
-    def save_tasks(self):
+    # Expansion A: Multi-step Undo
+    def save_state(self):
         """
-        Saves the current task list to a JSON file.
+        Saves the current state of the task list to the history stack.
         """
-        with open(self.data_file, "w") as file:
-            json.dump([task.__dict__ for task in self.tasks], file)
+        self.history.append([task.__dict__.copy() for task in self.tasks])
+        self.redo_stack.clear()  # Clear redo stack whenever a new operation is performed
 
-    def load_tasks(self):
+    def undo(self):
         """
-        Loads tasks from the JSON file if it exists.
+        Reverts the task list to the last saved state.
+        Raises:
+            IndexError: If there is no state to undo.
         """
-        if os.path.exists(self.data_file):
-            with open(self.data_file, "r") as file:
-                task_data = json.load(file)
-                self.tasks = [Task(**data) for data in task_data]
+        if not self.history:
+            print("No actions to undo.")
+            return
+        self.redo_stack.append([task.__dict__.copy() for task in self.tasks])
+        previous_state = self.history.pop()
+        self.tasks = [Task(**task) for task in previous_state]
+        print("Undo successful.")
 
-    # Version Control for Task Data
-    def save_version(self):
+    # Expansion B: Redo Functionality
+    def redo(self):
         """
-        Saves the current state of the task list to the version history.
+        Reapplies the last undone state to the task list.
+        Raises:
+            IndexError: If there is no state to redo.
         """
-        self.version_history.append([task.__dict__.copy() for task in self.tasks])
+        if not self.redo_stack:
+            print("No actions to redo.")
+            return
+        self.history.append([task.__dict__.copy() for task in self.tasks])
+        next_state = self.redo_stack.pop()
+        self.tasks = [Task(**next_state) for next_state in next_state]
+        print("Redo successful.")
 
-    def view_versions(self):
-        """
-        Displays all saved versions of the task list.
-        """
-        for i, version in enumerate(self.version_history):
-            print(f"Version {i + 1}:")
-            for task in version:
-                print(f"  Title: {task['title']}, Description: {task['description']}, Status: {task['status']}")
-
-    # Backup and Restore Functionality
-    def create_backup(self):
-        """
-        Creates a backup of the current task list in the backup directory.
-        """
-        if not os.path.exists(self.backup_dir):
-            os.makedirs(self.backup_dir)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_file = os.path.join(self.backup_dir, f"backup_{timestamp}.json")
-        with open(backup_file, "w") as file:
-            json.dump([task.__dict__ for task in self.tasks], file)
-        print(f"Backup created: {backup_file}")
-
-    def restore_from_backup(self, backup_file):
-        """
-        Restores the task list from a specified backup file.
-        Args:
-            backup_file (str): The path to the backup file to restore from.
-        """
-        if os.path.exists(backup_file):
-            with open(backup_file, "r") as file:
-                task_data = json.load(file)
-                self.tasks = [Task(**data) for data in task_data]
-            print(f"Restored tasks from backup: {backup_file}")
-        else:
-            print(f"Backup file not found: {backup_file}")
-
-    # Override methods to include version saving and persistence
+    # Override methods to include state saving
     def add_task(self, title: str, description: str):
-        self.save_version()
+        self.save_state()
         super().add_task(title, description)
-        self.save_tasks()
 
     def remove_task(self, title: str):
-        self.save_version()
+        self.save_state()
         super().remove_task(title)
-        self.save_tasks()
 
     def mark_task_complete(self, title: str):
-        self.save_version()
+        self.save_state()
         super().mark_task_complete(title)
-        self.save_tasks()
 
     def mark_task_incomplete(self, title: str):
-        self.save_version()
+        self.save_state()
         super().mark_task_incomplete(title)
-        self.save_tasks()
-
 
 
